@@ -1,0 +1,59 @@
+global class AccountUpdateBatch implements Database.Batchable<sObject>, Database.Stateful {
+    
+    // We use Database.Stateful so this variable retains its value across multiple 'execute' chunks
+    global Integer recordsProcessed = 0;
+
+    // 1. START METHOD
+    global Database.QueryLocator start(Database.BatchableContext bc) {
+        // Query the records you want to process. 
+        // Using QueryLocator allows you to bypass the 50,000 SOQL limit (up to 50 million).
+        String query = 'SELECT Id, Name, Description FROM Account WHERE Active__c = \'Yes\'';
+        return Database.getQueryLocator(query);
+    }
+
+    // 2. EXECUTE METHOD
+    global void execute(Database.BatchableContext bc, List<Account> scope) {
+        // 'scope' contains the current chunk of records (up to 2,000 max, default 200)
+        List<Account> accountsToUpdate = new List<Account>();
+        
+        for (Account acc : scope) {
+            // Update the description
+            acc.Description = 'Updated by Batch Job on ' + Date.today().format();
+            accountsToUpdate.add(acc);
+            
+            // Increment our stateful counter
+            recordsProcessed++;
+        }
+        
+        // Perform DML operation to save changes
+        if (!accountsToUpdate.isEmpty()) {
+            update accountsToUpdate;
+        }
+    }
+
+    // 3. FINISH METHOD
+    global void finish(Database.BatchableContext bc) {
+        // This runs once all batches have finished executing.
+        // It's perfect for post-processing, logging, or sending an alert.
+        System.debug('Batch Job Complete! Total records processed: ' + recordsProcessed);
+        
+        // Example of querying the AsyncApexJob object to check for errors:
+        AsyncApexJob jobDetails = [
+            SELECT Id, Status, NumberOfErrors, JobItemsProcessed, TotalJobItems 
+            FROM AsyncApexJob 
+            WHERE Id = :bc.getJobId()
+        ];
+        
+        System.debug('Total Job Items: ' + jobDetails.TotalJobItems);
+        System.debug('Total Errors: ' + jobDetails.NumberOfErrors);
+    }
+}
+
+// Instantiate the batch class
+AccountUpdateBatch myBatch = new AccountUpdateBatch();
+
+// Execute the batch. 
+// The optional second parameter (200) defines the chunk size. If left blank, it defaults to 200.
+Id batchJobId = Database.executeBatch(myBatch, 200);
+
+System.debug('Batch Job Enqueued with ID: ' + batchJobId);
