@@ -57,3 +57,21 @@ AccountUpdateBatch myBatch = new AccountUpdateBatch();
 Id batchJobId = Database.executeBatch(myBatch, 200);
 
 System.debug('Batch Job Enqueued with ID: ' + batchJobId);
+
+
+Calling From Schedule Class
+
+global class MyBatchScheduler implements Schedulable {
+    global void execute(SchedulableContext sc) {
+        MyBatchClass batchJob = new MyBatchClass();
+        Database.executeBatch(batchJob, 200); // 200 is the batch scope size
+    }
+}
+
+// Schedule to run every day at 2:00 AM
+String cronExp = '0 0 2 * * ?'; // seconds minutes hours day_of_month month day_of_week
+System.schedule(
+    'Daily Batch Job',        // Job name
+    cronExp,                  // CRON expression
+    new MyBatchScheduler()    // Schedulable class instance
+);
